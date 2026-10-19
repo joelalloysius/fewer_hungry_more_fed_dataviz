@@ -70,17 +70,20 @@ I learned D3 from scratch while building this, using Claude as a step-by-step tu
  
 - Current series (2010–2023): https://www.fao.org/faostat/en/#data/FBS
 - Historic series (1961–2009): https://www.fao.org/faostat/en/#data/FBSH
+
 **Method:**
  
 1. For each country and year, I took food supply (kcal per person per day) and population from the Food Balance Sheets.
 2. The FAO only publishes each country's average, so I modelled the spread of calories within each country as a log-normal curve around that average, with a coefficient of variation of 0.25. This is similar to the approach the FAO uses for its own hunger estimates.
 3. I added up the curves for all countries, weighted by population, to get one world curve per year.
 4. The share below 1,800 kcal is read from that combined curve.
+
 **Caveats:**
  
 - **Supply is not intake.** The figures are food available at shop and household level, including food that is later wasted.
 - **The curve and hunger share are estimates.** The FAO's official undernourishment figure for recent years is around 8–9%, higher than this model's roughly 5%. The gap comes from the simpler method and from countries missing from the Food Balance Sheets, some of which are conflict zones with high hunger.
 - **There's a method break in 2010**, when the FAO revised its Food Balance Sheets methodology. Averages before and after 2010 differ slightly.
+
 ## Credits
  
 - Data: FAO, FAOSTAT. Please check the FAO's terms of use before reusing the data.
