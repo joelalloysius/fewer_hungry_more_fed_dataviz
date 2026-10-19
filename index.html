@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Calories per person</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    /* Colours: defined once, used everywhere */
+    :root {
+      --ink: #1d2433;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --faint: #d9dde3;
+      --bg: #ffffff;
+      --blue: #2a78d6;
+      --orange: #eb6834;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", Arial, sans-serif;
+    }
+
+    .wrap {
+      width: 540px;
+      height: 675px;          /* 4:5 shape, same as 1080 x 1350 at 2x */
+      padding: 32px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);   /* shows the frame edge; remove before exporting if you like */
+    }
+
+    /* Headings */
+    h1 { font-size: 28px; font-weight: 600; margin: 0 0 6px; }
+    h3 { font-size: 16px; font-weight: 500; margin: 0 0 4px; }
+    .sub { font-size: 14px; color: var(--muted); margin: 0 0 16px; }
+
+    /* Play button */
+    #play {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--blue);
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    #play:hover { opacity: 0.85; }
+
+    /* Axis */
+    .axis text { fill: var(--muted); font-size: 12px; font-family: inherit; }
+    .axis path, .axis line { stroke: var(--faint); }
+
+    /* KPI cards */
+    .cards { display: flex; gap: 12px; width: 100%; margin-top: 12px; }
+    .card {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .label { font-size: 13px; color: var(--muted); }
+    .value { font-size: 28px; font-weight: 600; margin-top: 2px; }
+    #avgKcal { color: var(--blue); }
+    #pctHungry { color: var(--orange); }
+
+    /* Source line */
+    .source { font-size: 11px; color: var(--muted); margin: auto 0 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Fewer hungry, more fed</h1>
+    <h3>About 3,000 calories were available per person per day in 2023</h3>
+    <p class="sub">World population by calories available per person per day, 1961–2023</p>
+
+    <button id="play" aria-label="Play">▶</button>
+    <div id="chart"></div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">Average per person</div>
+        <div class="value" id="avgKcal">–</div>
+      </div>
+      <div class="card">
+        <div class="label">Below hunger line (est.)</div>
+        <div class="value" id="pctHungry">–</div>
+      </div>
+    </div>
+
+    <p class="source">Source: FAO, FAOSTAT Food Balance Sheets (1961–2023). Distribution and share below 1,800 kcal are estimates based on country averages.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+  <script>
+  Promise.all([
+    d3.csv("calorie_distribution.csv", d3.autoType),
+    d3.csv("calorie_stats.csv", d3.autoType)
+  ]).then(([dist, stats]) => {
+
+    // Chart size: 476 = 540 frame width minus 32px padding on each side
+    const W = 476;
+    const H = 320;
+    const bottom = H - 48;   // where the axis sits
+
+    // The drawing area
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", W)
+      .attr("height", H);
+
+    // Scales: data values to pixels
+    const x = d3.scaleLinear()
+      .domain([1000, 4500])
+      .range([14, W - 18]);
+
+    const y = d3.scaleLinear()
+      .domain([0, 200])
+      .range([bottom, 10]);
+
+    // Shape helpers
+    const area = d3.area()
+      .x(d => x(d.kcal_mid))
+      .y0(y(0))
+      .y1(d => y(d.people_millions))
+      .curve(d3.curveBasis);
+
+    const line = d3.line()
+      .x(d => x(d.kcal_mid))
+      .y(d => y(d.people_millions))
+      .curve(d3.curveBasis);
+
+    // Big year in the corner (drawn first so it sits behind the curve)
+    const yearText = svg.append("text")
+      .attr("x", W - 18)
+      .attr("y", 80)
+      .attr("text-anchor", "end")
+      .attr("font-size", 64)
+      .attr("font-weight", 600)
+      .attr("fill", "var(--faint)");
+
+    // The three shapes, created once, in drawing order
+    const areaPath = svg.append("path")
+      .attr("fill", "var(--blue)")
+      .attr("fill-opacity", 0.15);
+
+    const hungryPath = svg.append("path")
+      .attr("fill", "var(--orange)")
+      .attr("fill-opacity", 0.6);
+
+    const linePath = svg.append("path")
+      .attr("fill", "none")
+      .attr("stroke", "var(--blue)")
+      .attr("stroke-width", 2);
+
+    // Axis along the bottom
+    svg.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0, ${bottom})`)
+      .call(d3.axisBottom(x).tickFormat(d3.format(",")).tickSizeOuter(0));
+
+    // Axis title
+    svg.append("text")
+      .attr("x", W / 2)
+      .attr("y", H - 10)
+      .attr("text-anchor", "middle")
+      .attr("font-size", 12)
+      .attr("fill", "var(--muted)")
+      .text("Calories available per person per day");
+
+    // Hunger line and its label
+    svg.append("line")
+      .attr("x1", x(1800))
+      .attr("x2", x(1800))
+      .attr("y1", 10)
+      .attr("y2", bottom)
+      .attr("stroke", "var(--muted)")
+      .attr("stroke-dasharray", "4 4");
+
+    svg.append("text")
+      .attr("x", x(1800) + 6)
+      .attr("y", 20)
+      .attr("font-size", 12)
+      .attr("fill", "var(--muted)")
+      .text("Hunger line: 1,800 kcal");
+
+    // Redraw everything that changes for a given year
+    function update(year) {
+      const rows = dist.filter(d => d.year === year);
+      const hungry = rows.filter(d => d.kcal_mid < 1800);
+
+      areaPath.datum(rows)
+        .transition().duration(140).ease(d3.easeLinear)
+        .attr("d", area);
+
+      hungryPath.datum(hungry)
+        .transition().duration(140).ease(d3.easeLinear)
+        .attr("d", area);
+
+      linePath.datum(rows)
+        .transition().duration(140).ease(d3.easeLinear)
+        .attr("d", line);
+
+      yearText.text(year);
+
+      const s = stats.find(d => d.year === year);
+      d3.select("#avgKcal").text(s.avg_kcal.toLocaleString() + " kcal");
+      d3.select("#pctHungry").text(s.pct_below_1800 + "%");
+    }
+
+    // Draw 2023 when the page loads
+    update(2023);
+
+    // Play / pause
+    let timer = null;
+    let currentYear = 2023;
+
+    d3.select("#play").on("click", function () {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        d3.select("#play").text("▶");
+        return;
+      }
+
+      if (currentYear >= 2023) currentYear = 1961;
+      d3.select("#play").text("❚❚");
+
+      timer = setInterval(function () {
+        update(currentYear);
+        currentYear++;
+        if (currentYear > 2023) {
+          clearInterval(timer);
+          timer = null;
+          d3.select("#play").text("▶");
+        }
+      }, 150);
+    });
+
+  });
+  </script>
+</body>
+</html>
